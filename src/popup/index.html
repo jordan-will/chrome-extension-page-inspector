@@ -1,0 +1,51 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Page Inspector</title>
+  <link rel="stylesheet" href="./popup.css">
+</head>
+<body>
+  <main class="popup-container">
+    <header class="popup-header">
+      <h1>Page Inspector</h1>
+      <p>Inspect and organize your browsing experience.</p>
+    </header>
+
+    <section class="page-information">
+      <h2>Current Page</h2>
+
+      <dl>
+        <div class="information-item">
+          <dt>Title</dt>
+          <dd id="page-title">Not available</dd>
+        </div>
+
+        <div class="information-item">
+          <dt>Domain</dt>
+          <dd id="page-domain">Not available</dd>
+        </div>
+
+        <div class="information-item">
+          <dt>URL</dt>
+          <dd id="page-url">Not available</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="actions">
+      <button id="inspect-button" type="button">
+        Inspect Page
+      </button>
+    </section>
+
+    <footer class="popup-footer">
+      <p>Page Inspector · Development Version</p>
+    </footer>
+  </main>
+
+  <script type="module" src="./popup.ts"></script>
+</body>
+</html>
