@@ -2,7 +2,11 @@ import type {
   InspectPageRequest,
   InspectPageResponse,
   PageInspectionData,
+  ToggleHighlightRequest,
+  ToggleHighlightResponse,
 } from "../shared/types/messages";
+
+let isHighlightEnabled = false;
 
 
 const pageTitleElement = document.querySelector<HTMLElement>(
@@ -44,6 +48,27 @@ const wordCountElement = document.querySelector<HTMLElement>(
 const inspectionStatusElement = document.querySelector<HTMLElement>(
   "#inspection-status"
 );
+
+const highlightButton = document.querySelector<HTMLButtonElement>(
+  "#highlight-button"
+);
+
+const highlightStatus = document.querySelector<HTMLParagraphElement>(
+  "#highlight-status"
+);
+
+async function ensureContentScript(tabId: number): Promise<void> {
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      type: "INSPECT_PAGE",
+    });
+  } catch {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["content/content.js"],
+    });
+  }
+}
 
 async function loadActiveTabInfo(): Promise<void> {
   try {
@@ -198,9 +223,78 @@ async function inspectActivePage(): Promise<void> {
   }
 }
 
+async function handleHighlightButtonClick(): Promise<void> {
+  if (!highlightButton || !highlightStatus) {
+    return;
+  }
+
+  try {
+    highlightButton.disabled = true;
+    highlightStatus.textContent = "Updating link highlighting...";
+
+    const tabs = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+
+    const activeTab = tabs[0];
+
+    if (!activeTab?.id) {
+      throw new Error("No active tab found.");
+    }
+
+    // Ensure the Content Script is available.
+    await ensureContentScript(activeTab.id);
+
+    // Calculate the next highlighting state.
+    const nextState = !isHighlightEnabled;
+
+    const request: ToggleHighlightRequest = {
+      type: "TOGGLE_LINK_HIGHLIGHT",
+      enabled: nextState,
+    };
+
+    // Send the highlighting request.
+    const response: ToggleHighlightResponse =
+      await chrome.tabs.sendMessage(activeTab.id, request);
+
+    if (!response.success) {
+      throw new Error(
+        response.error ?? "Link highlighting failed."
+      );
+    }
+
+    // Update the popup state after a successful response.
+    isHighlightEnabled = response.enabled ?? nextState;
+
+    // Update the interface.
+    highlightButton.textContent = isHighlightEnabled
+      ? "Remove Highlights"
+      : "Highlight Links";
+
+    highlightStatus.textContent = isHighlightEnabled
+      ? `${response.highlightedLinks ?? 0} links highlighted.`
+      : "Link highlighting disabled.";
+
+  } catch (error) {
+    console.error("Highlighting error:", error);
+
+    highlightStatus.textContent =
+      error instanceof Error
+        ? error.message
+        : "An unexpected error occurred.";
+
+  } finally {
+    highlightButton.disabled = false;
+  }
+}
+
 if (inspectButton) {
   inspectButton.addEventListener("click", inspectActivePage);
 }
 
+if (highlightButton) {
+  highlightButton.addEventListener("click", handleHighlightButtonClick);
+}
 // Load browser tab information when popup opens.
 loadActiveTabInfo();

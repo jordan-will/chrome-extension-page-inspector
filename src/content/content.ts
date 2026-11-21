@@ -8,6 +8,7 @@ import type {
   ExtensionRequest,
   InspectPageResponse,
   PageInspectionData,
+  ExtensionResponse
 } from "../shared/types/messages";
 
 declare global {
@@ -15,6 +16,8 @@ declare global {
     pageInspectorInitialized?: boolean;
   }
 }
+
+const HIGHLIGHT_CLASS = "page-inspector-highlight";
 
 // Prevent duplicate message listener registration.
 if (!window.pageInspectorInitialized) {
@@ -33,12 +36,29 @@ function initializeContentScript(): void {
 function handleMessage(
   message: ExtensionRequest,
   _sender: chrome.runtime.MessageSender,
-  sendResponse: (response: InspectPageResponse) => void
+  sendResponse: (response: ExtensionResponse) => void
 ): void {
   try {
-    switch (message.type) 
-    {
-      
+    switch (message.type) {
+
+      case "TOGGLE_LINK_HIGHLIGHT": {
+        if (message.enabled) {
+          injectHighlightStyles();
+        }
+
+        const highlightedLinks = toggleLinkHighlight(
+          message.enabled
+        );
+
+        sendResponse({
+          success: true,
+          enabled: message.enabled,
+          highlightedLinks,
+        });
+
+        break;
+      }
+
       case "INSPECT_PAGE": {
         const data = inspectPage();
         sendResponse(createSuccessResponse(data));
@@ -73,6 +93,42 @@ function inspectPage(): PageInspectionData {
     paragraphs: document.querySelectorAll("p").length,
     wordCount: getWordCount(),
   };
+}
+
+function toggleLinkHighlight(enabled: boolean): number {
+  const links = document.querySelectorAll<HTMLAnchorElement>("a");
+
+  links.forEach((link) => {
+    if (enabled) {
+      link.classList.add(HIGHLIGHT_CLASS);
+    } else {
+      link.classList.remove(HIGHLIGHT_CLASS);
+    }
+  });
+
+  return links.length;
+}
+
+function injectHighlightStyles(): void {
+  const styleId = "page-inspector-highlight-styles";
+
+  if (document.getElementById(styleId)) {
+    return;
+  }
+
+  const style = document.createElement("style");
+
+  style.id = styleId;
+
+  style.textContent = `
+    .${HIGHLIGHT_CLASS} {
+      outline: 2px solid #f59e0b !important;
+      background-color: rgba(245, 158, 11, 0.15) !important;
+      border-radius: 3px !important;
+    }
+  `;
+
+  document.head.appendChild(style);
 }
 
 // Counts words in the webpage.
