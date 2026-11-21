@@ -1,10 +1,8 @@
-
 import { defineConfig } from "vite";
 import { resolve } from "node:path";
 
 export default defineConfig({
   root: "src",
-
   publicDir: "../public",
 
   build: {
@@ -13,7 +11,19 @@ export default defineConfig({
 
     rollupOptions: {
       input: {
-        popup: resolve(process.cwd(), "src/popup/index.html"),
+        popup: resolve(
+          process.cwd(),
+          "src/popup/index.html"
+        ),
+
+        "content/content": resolve(
+          process.cwd(),
+          "src/content/content.ts"
+        ),
+      },
+
+      output: {
+        entryFileNames: "[name].js",
       },
     },
   },

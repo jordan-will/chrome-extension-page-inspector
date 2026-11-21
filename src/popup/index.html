@@ -1,12 +1,13 @@
-
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Page Inspector</title>
   <link rel="stylesheet" href="./popup.css">
 </head>
+
 <body>
   <main class="popup-container">
     <header class="popup-header">
@@ -41,6 +42,39 @@
       </button>
     </section>
 
+    <section class="inspection-results" id="inspection-results">
+      <h2>Page Inspection</h2>
+
+      <dl>
+        <div class="inspection-item">
+          <dt>Headings</dt>
+          <dd id="heading-count">—</dd>
+        </div>
+
+        <div class="inspection-item">
+          <dt>Links</dt>
+          <dd id="link-count">—</dd>
+        </div>
+
+        <div class="inspection-item">
+          <dt>Images</dt>
+          <dd id="image-count">—</dd>
+        </div>
+
+        <div class="inspection-item">
+          <dt>Paragraphs</dt>
+          <dd id="paragraph-count">—</dd>
+        </div>
+
+        <div class="inspection-item">
+          <dt>Word Count</dt>
+          <dd id="word-count">—</dd>
+        </div>
+      </dl>
+
+      <p id="inspection-status"></p>
+    </section>
+
     <footer class="popup-footer">
       <p>Page Inspector · Development Version</p>
     </footer>
@@ -48,4 +82,5 @@
 
   <script type="module" src="./popup.ts"></script>
 </body>
+
 </html>

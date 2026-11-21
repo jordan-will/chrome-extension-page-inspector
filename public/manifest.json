@@ -4,6 +4,10 @@
   "name": "Page Inspector",
   "version": "1.0.0",
   "description": "Inspect webpages, highlight links, and manage a personal reading list.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
   "action": {
     "default_popup": "popup/index.html"
   }

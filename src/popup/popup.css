@@ -128,3 +128,51 @@ body {
   font-size: 11px;
   color: #9ca3af;
 }
+
+
+/* =========================
+   8. Inspection results
+========================= */
+
+.inspection-results {
+  padding: 16px;
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.inspection-results h2 {
+  font-size: 15px;
+  margin-bottom: 14px;
+}
+
+.inspection-results dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.inspection-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inspection-item dt {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+}
+
+.inspection-item dd {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+#inspection-status {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #6b7280;
+}
