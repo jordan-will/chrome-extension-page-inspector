@@ -1,12 +1,9 @@
-interface PageInspectionData {
-  title: string;
-  url: string;
-  headings: number;
-  links: number;
-  images: number;
-  paragraphs: number;
-  wordCount: number;
-}
+import type {
+  InspectPageRequest,
+  InspectPageResponse,
+  PageInspectionData,
+} from "../shared/types/messages";
+
 
 const pageTitleElement = document.querySelector<HTMLElement>(
   "#page-title"
@@ -161,13 +158,26 @@ async function inspectActivePage(): Promise<void> {
       files: ["content/content.js"],
     });
 
-    // Send an inspection request to the Content Script.
-    const data = await chrome.tabs.sendMessage(
-      tabId,
-      { type: "INSPECT_PAGE" }
-    ) as PageInspectionData;
+    // Define the inspection request.
+    const request: InspectPageRequest = {
+      type: "INSPECT_PAGE",
+    };
 
-    displayInspectionData(data);
+    // Send the request and receive the structured response.
+    const response: InspectPageResponse =
+      await chrome.tabs.sendMessage(tabId, request);
+
+    if (!response.success) {
+      throw new Error(
+        response.error ?? "Page inspection failed."
+      );
+    }
+
+    if (!response.data) {
+      throw new Error("Inspection response contains no data.");
+    }
+
+    displayInspectionData(response.data);
 
     if (inspectionStatusElement) {
       inspectionStatusElement.textContent =
@@ -178,7 +188,9 @@ async function inspectActivePage(): Promise<void> {
 
     if (inspectionStatusElement) {
       inspectionStatusElement.textContent =
-        "Unable to inspect this page.";
+        error instanceof Error
+          ? error.message
+          : "Unable to inspect this page.";
     }
   } finally {
     inspectButton.disabled = false;
