@@ -6,9 +6,18 @@ import type {
   ToggleHighlightResponse,
 } from "../shared/types/messages";
 
+import type { SavedPage } from "../shared/types/reading-list";
+
+import {
+  getReadingList,
+  removePage,
+  savePage
+} from "../shared/storage/reading-list";
+
 let isHighlightEnabled = false;
 
 
+// DOM REFERENCIES
 const pageTitleElement = document.querySelector<HTMLElement>(
   "#page-title"
 );
@@ -55,6 +64,22 @@ const highlightButton = document.querySelector<HTMLButtonElement>(
 
 const highlightStatus = document.querySelector<HTMLParagraphElement>(
   "#highlight-status"
+);
+
+const readingListStatus = document.querySelector<HTMLParagraphElement>(
+  "#reading-list-status"
+);
+
+const readingListItems = document.querySelector<HTMLUListElement>(
+  "#reading-list-items"
+);
+
+const savePageButton = document.querySelector<HTMLButtonElement>(
+  "#save-page-button"
+);
+
+const savePageStatus = document.querySelector<HTMLParagraphElement>(
+  "#save-page-status"
 );
 
 async function ensureContentScript(tabId: number): Promise<void> {
@@ -289,6 +314,172 @@ async function handleHighlightButtonClick(): Promise<void> {
   }
 }
 
+async function loadReadingList(): Promise<void> {
+  if (!readingListStatus || !readingListItems) {
+    return;
+  }
+
+  readingListStatus.textContent = "Loading saved pages...";
+  readingListItems.replaceChildren();
+
+  try {
+    const pages = await getReadingList();
+
+    displayReadingList(pages);
+  } catch (error) {
+    console.error("Failed to load reading list:", error);
+
+    readingListStatus.textContent =
+      "Unable to load saved pages.";
+  }
+}
+
+function displayReadingList(pages: SavedPage[]): void {
+  if (!readingListStatus || !readingListItems) {
+    return;
+  }
+
+  readingListItems.replaceChildren();
+
+  if (pages.length === 0) {
+    readingListStatus.textContent =
+      "Your reading list is empty.";
+
+    return;
+  }
+
+  readingListStatus.textContent =
+    `${pages.length} saved page(s).`;
+
+  for (const page of pages) {
+    const listItem = document.createElement("li");
+    listItem.className = "reading-list-item";
+
+    const titleLink = document.createElement("a");
+    titleLink.textContent = page.title;
+    titleLink.href = page.url;
+    titleLink.target = "_blank";
+    titleLink.rel = "noopener noreferrer";
+
+    const urlElement = document.createElement("p");
+    urlElement.textContent = page.url;
+
+    const dateElement = document.createElement("small");
+    dateElement.textContent =
+      `Saved: ${new Date(page.savedAt).toLocaleString()}`;
+
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.textContent = "Remove";
+
+    removeButton.addEventListener("click", () => {
+      void handleRemovePage(page.id, removeButton);
+    });
+
+    listItem.append(
+      titleLink,
+      urlElement,
+      dateElement,
+      removeButton
+    );
+
+    readingListItems.appendChild(listItem);
+  }
+}
+
+async function handleRemovePage(
+  pageId: string,
+  button: HTMLButtonElement
+): Promise<void> {
+  button.disabled = true;
+  button.textContent = "Removing...";
+
+  try {
+    const removed = await removePage(pageId);
+
+    if (!removed) {
+      throw new Error("The saved page could not be found.");
+    }
+
+    await loadReadingList();
+  } catch (error) {
+    console.error("Failed to remove saved page:", error);
+
+    button.disabled = false;
+    button.textContent = "Remove";
+
+    if (readingListStatus) {
+      readingListStatus.textContent =
+        error instanceof Error
+          ? error.message
+          : "Unable to remove saved page.";
+    }
+  }
+}
+
+
+async function handleSavePageClick(): Promise<void> {
+  if (!savePageButton || !savePageStatus) {
+    return;
+  }
+
+  savePageButton.disabled = true;
+  savePageButton.textContent = "Saving...";
+  savePageStatus.textContent = "";
+
+  try {
+    const tabs = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+
+    const activeTab = tabs[0];
+
+    if (!activeTab || !activeTab.url) {
+      throw new Error("Unable to retrieve the active page.");
+    }
+
+    const pageUrl = activeTab.url;
+
+    // Only save regular web pages.
+    if (!/^https?:\/\//i.test(pageUrl)) {
+      throw new Error(
+        "Only HTTP and HTTPS pages can be saved."
+      );
+    }
+
+    const result = await savePage({
+      title: activeTab.title ?? pageUrl,
+      url: pageUrl,
+    });
+
+    if (!result.success) {
+      savePageStatus.textContent =
+        "This page is already in your Reading List.";
+
+      return;
+    }
+
+    savePageStatus.textContent =
+      "Page saved successfully.";
+
+    await loadReadingList();
+
+  } catch (error) {
+    console.error("Failed to save page:", error);
+
+    savePageStatus.textContent =
+      error instanceof Error
+        ? error.message
+        : "Unable to save this page.";
+
+  } finally {
+    savePageButton.disabled = false;
+    savePageButton.textContent = "Save Page";
+  }
+}
+
+
 if (inspectButton) {
   inspectButton.addEventListener("click", inspectActivePage);
 }
@@ -296,5 +487,16 @@ if (inspectButton) {
 if (highlightButton) {
   highlightButton.addEventListener("click", handleHighlightButtonClick);
 }
+
+if (savePageButton) {
+  savePageButton.addEventListener(
+    "click",
+    handleSavePageClick
+  );
+}
+
 // Load browser tab information when popup opens.
 loadActiveTabInfo();
+
+// Load saved pages when popup opens.
+loadReadingList();

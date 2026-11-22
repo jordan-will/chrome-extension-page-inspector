@@ -1,12 +1,17 @@
-
 {
   "manifest_version": 3,
   "name": "Page Inspector",
   "version": "1.0.0",
   "description": "Inspect webpages, highlight links, and manage a personal reading list.",
+  "background": {
+    "service_worker": "background/background.js",
+    "type": "module"
+  },
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "contextMenus",
+    "storage"
   ],
   "action": {
     "default_popup": "popup/index.html"

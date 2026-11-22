@@ -20,6 +20,11 @@ export default defineConfig({
           process.cwd(),
           "src/content/content.ts"
         ),
+
+        "background/background": resolve(
+          process.cwd(),
+          "src/background/background.ts"
+        ),
       },
 
       output: {
