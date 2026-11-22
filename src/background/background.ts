@@ -6,84 +6,89 @@ import type {
   ToggleHighlightResponse,
 } from "../shared/types/messages";
 
-import { savePage } from "../shared/storage/reading-list";
+import {
+  savePage,
+} from "../shared/storage/reading-list";
+
+import {
+  getPreferences,
+} from "../shared/storage/preferences";
 
 // Context menu identifiers.
 const MENU_INSPECT = "page-inspector-inspect";
 const MENU_HIGHLIGHT = "page-inspector-highlight";
 const MENU_SAVE = "page-inspector-save";
 
-chrome.runtime.onInstalled.addListener((details) => {
-  console.log("Page Inspector installed:", details.reason);
-  createContextMenus();
+// Register context menus when the extension is installed or updated.
+chrome.runtime.onInstalled.addListener(() => {
+  console.log("Page Inspector installed or updated.");
+
+  void createContextMenus();
 });
 
+// Log when Chrome starts.
 chrome.runtime.onStartup.addListener(() => {
-  console.log("Page Inspector browser session started");
+  console.log("Page Inspector started.");
 });
 
-function createContextMenus(): void {
-  chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({
-      id: MENU_INSPECT,
-      title: "Inspect Page",
-      contexts: ["page"],
-    });
+// Create context menu items.
+async function createContextMenus(): Promise<void> {
+  await chrome.contextMenus.removeAll();
 
-    chrome.contextMenus.create({
-      id: MENU_HIGHLIGHT,
-      title: "Highlight Links",
-      contexts: ["page"],
-    });
+  chrome.contextMenus.create({
+    id: MENU_INSPECT,
+    title: "Inspect Page",
+    contexts: ["page"],
+  });
 
-    chrome.contextMenus.create({
-      id: MENU_SAVE,
-      title: "Save Page",
-      contexts: ["page"],
-    });
+  chrome.contextMenus.create({
+    id: MENU_HIGHLIGHT,
+    title: "Highlight Links",
+    contexts: ["page"],
+  });
+
+  chrome.contextMenus.create({
+    id: MENU_SAVE,
+    title: "Save Page",
+    contexts: ["page"],
   });
 }
 
-async function ensureContentScript(
-  tabId: number
-): Promise<void> {
+// Ensure that the Content Script is available.
+async function ensureContentScript(tabId: number): Promise<void> {
   try {
     await chrome.tabs.sendMessage(tabId, {
       type: "INSPECT_PAGE",
     });
   } catch {
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId },
-        files: ["content/content.js"],
-      });
-    } catch (error) {
-      throw new Error(
-        `Failed to inject Content Script: ${getErrorMessage(error)}`
-      );
-    }
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["content/content.js"],
+    });
   }
 }
 
+// Send inspection requests to the Content Script.
 function sendToContentScript(
   tabId: number,
   request: InspectPageRequest
 ): Promise<InspectPageResponse>;
 
+// Send highlighting requests to the Content Script.
 function sendToContentScript(
   tabId: number,
   request: ToggleHighlightRequest
 ): Promise<ToggleHighlightResponse>;
 
-async function sendToContentScript(
+// Generic implementation.
+function sendToContentScript(
   tabId: number,
   request: InspectPageRequest | ToggleHighlightRequest
 ): Promise<InspectPageResponse | ToggleHighlightResponse> {
-  await ensureContentScript(tabId);
-
   return chrome.tabs.sendMessage(tabId, request);
 }
 
+// Normalize unknown errors into readable messages.
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -92,10 +97,22 @@ function getErrorMessage(error: unknown): string {
   return "An unexpected error occurred.";
 }
 
+// Display save-operation feedback through the extension badge.
 async function showSaveFeedback(
   tabId: number,
   status: "SAVE" | "DUP" | "ERR"
 ): Promise<void> {
+  const preferences = await getPreferences();
+
+  if (!preferences.saveNotificationsEnabled) {
+    await chrome.action.setBadgeText({
+      tabId,
+      text: "",
+    });
+
+    return;
+  }
+
   const colors = {
     SAVE: "#16a34a",
     DUP: "#d97706",
@@ -113,12 +130,13 @@ async function showSaveFeedback(
   });
 }
 
+// Handle context menu interactions.
 async function handleContextMenuClick(
   info: chrome.contextMenus.OnClickData,
   tab?: chrome.tabs.Tab
 ): Promise<void> {
-  if (typeof tab?.id !== "number") {
-    console.error("Unable to identify the target tab.");
+  if (!tab?.id) {
+    console.error("Unable to retrieve the active tab.");
     return;
   }
 
@@ -126,8 +144,9 @@ async function handleContextMenuClick(
 
   try {
     switch (info.menuItemId) {
-      
       case MENU_INSPECT: {
+        await ensureContentScript(tabId);
+
         const request: InspectPageRequest = {
           type: "INSPECT_PAGE",
         };
@@ -137,21 +156,19 @@ async function handleContextMenuClick(
           request
         );
 
-        if (!response.success || !response.data) {
+        if (!response.success) {
           throw new Error(
             response.error ?? "Page inspection failed."
           );
         }
 
-        console.log(
-          "Page inspection results:",
-          response.data
-        );
-
+        console.log("Page inspection result:", response.data);
         break;
       }
 
       case MENU_HIGHLIGHT: {
+        await ensureContentScript(tabId);
+
         const request: ToggleHighlightRequest = {
           type: "TOGGLE_LINK_HIGHLIGHT",
           enabled: true,
@@ -169,7 +186,8 @@ async function handleContextMenuClick(
         }
 
         console.log(
-          `${response.highlightedLinks ?? 0} links highlighted.`
+          "Highlighted links:",
+          response.highlightedLinks
         );
 
         break;
@@ -205,24 +223,35 @@ async function handleContextMenuClick(
         );
 
         await showSaveFeedback(tabId, "SAVE");
-
         break;
       }
+
+      default:
+        console.warn(
+          "Unknown context menu item:",
+          info.menuItemId
+        );
     }
   } catch (error) {
     console.error(
-      "Context menu action failed:",
+      "Context menu operation failed:",
       getErrorMessage(error)
     );
 
     if (info.menuItemId === MENU_SAVE) {
-      await showSaveFeedback(tabId, "ERR");
+      try {
+        await showSaveFeedback(tabId, "ERR");
+      } catch (feedbackError) {
+        console.error(
+          "Failed to display save feedback:",
+          getErrorMessage(feedbackError)
+        );
+      }
     }
   }
 }
 
-chrome.contextMenus.onClicked.addListener(
-  (info, tab) => {
-    void handleContextMenuClick(info, tab);
-  }
-);
+// Register the context menu click listener.
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  void handleContextMenuClick(info, tab);
+});

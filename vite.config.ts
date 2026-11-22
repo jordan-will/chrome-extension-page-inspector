@@ -16,6 +16,11 @@ export default defineConfig({
           "src/popup/index.html"
         ),
 
+        options: resolve(
+          process.cwd(),
+          "src/options/index.html"
+        ),
+
         "content/content": resolve(
           process.cwd(),
           "src/content/content.ts"

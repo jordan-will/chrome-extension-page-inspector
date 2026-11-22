@@ -1,3 +1,4 @@
+
 import type {
   InspectPageRequest,
   InspectPageResponse,
@@ -11,13 +12,14 @@ import type { SavedPage } from "../shared/types/reading-list";
 import {
   getReadingList,
   removePage,
-  savePage
+  savePage,
 } from "../shared/storage/reading-list";
+
+import { getPreferences } from "../shared/storage/preferences";
 
 let isHighlightEnabled = false;
 
-
-// DOM REFERENCIES
+// DOM REFERENCES
 const pageTitleElement = document.querySelector<HTMLElement>(
   "#page-title"
 );
@@ -82,6 +84,40 @@ const savePageStatus = document.querySelector<HTMLParagraphElement>(
   "#save-page-status"
 );
 
+// PREFERENCES
+async function loadPreferences(): Promise<void> {
+  if (!highlightButton) {
+    return;
+  }
+
+  try {
+    const preferences = await getPreferences();
+
+    highlightButton.disabled =
+      !preferences.highlightLinksEnabled;
+
+    if (!preferences.highlightLinksEnabled) {
+      if (highlightStatus) {
+        highlightStatus.textContent =
+          "Link highlighting is disabled in Options.";
+      }
+    } else if (highlightStatus) {
+      highlightStatus.textContent =
+        "Link highlighting is available.";
+    }
+  } catch (error) {
+    console.error("Failed to load preferences:", error);
+
+    highlightButton.disabled = true;
+
+    if (highlightStatus) {
+      highlightStatus.textContent =
+        "Unable to load extension preferences.";
+    }
+  }
+}
+
+// CONTENT SCRIPT
 async function ensureContentScript(tabId: number): Promise<void> {
   try {
     await chrome.tabs.sendMessage(tabId, {
@@ -95,6 +131,7 @@ async function ensureContentScript(tabId: number): Promise<void> {
   }
 }
 
+// ACTIVE TAB INFORMATION
 async function loadActiveTabInfo(): Promise<void> {
   try {
     const tabs = await chrome.tabs.query({
@@ -154,6 +191,7 @@ function displayUnavailableInfo(): void {
   }
 }
 
+// PAGE INSPECTION
 function displayInspectionData(data: PageInspectionData): void {
   if (headingCountElement) {
     headingCountElement.textContent = String(data.headings);
@@ -202,18 +240,15 @@ async function inspectActivePage(): Promise<void> {
 
     const tabId = activeTab.id;
 
-    // Inject the Content Script into the active tab.
     await chrome.scripting.executeScript({
       target: { tabId },
       files: ["content/content.js"],
     });
 
-    // Define the inspection request.
     const request: InspectPageRequest = {
       type: "INSPECT_PAGE",
     };
 
-    // Send the request and receive the structured response.
     const response: InspectPageResponse =
       await chrome.tabs.sendMessage(tabId, request);
 
@@ -248,12 +283,22 @@ async function inspectActivePage(): Promise<void> {
   }
 }
 
+// LINK HIGHLIGHTING
 async function handleHighlightButtonClick(): Promise<void> {
   if (!highlightButton || !highlightStatus) {
     return;
   }
 
   try {
+    const preferences = await getPreferences();
+
+    if (!preferences.highlightLinksEnabled) {
+      highlightButton.disabled = true;
+      highlightStatus.textContent =
+        "Link highlighting is disabled in Options.";
+      return;
+    }
+
     highlightButton.disabled = true;
     highlightStatus.textContent = "Updating link highlighting...";
 
@@ -268,10 +313,8 @@ async function handleHighlightButtonClick(): Promise<void> {
       throw new Error("No active tab found.");
     }
 
-    // Ensure the Content Script is available.
     await ensureContentScript(activeTab.id);
 
-    // Calculate the next highlighting state.
     const nextState = !isHighlightEnabled;
 
     const request: ToggleHighlightRequest = {
@@ -279,7 +322,6 @@ async function handleHighlightButtonClick(): Promise<void> {
       enabled: nextState,
     };
 
-    // Send the highlighting request.
     const response: ToggleHighlightResponse =
       await chrome.tabs.sendMessage(activeTab.id, request);
 
@@ -289,10 +331,8 @@ async function handleHighlightButtonClick(): Promise<void> {
       );
     }
 
-    // Update the popup state after a successful response.
     isHighlightEnabled = response.enabled ?? nextState;
 
-    // Update the interface.
     highlightButton.textContent = isHighlightEnabled
       ? "Remove Highlights"
       : "Highlight Links";
@@ -300,7 +340,6 @@ async function handleHighlightButtonClick(): Promise<void> {
     highlightStatus.textContent = isHighlightEnabled
       ? `${response.highlightedLinks ?? 0} links highlighted.`
       : "Link highlighting disabled.";
-
   } catch (error) {
     console.error("Highlighting error:", error);
 
@@ -308,12 +347,16 @@ async function handleHighlightButtonClick(): Promise<void> {
       error instanceof Error
         ? error.message
         : "An unexpected error occurred.";
-
   } finally {
-    highlightButton.disabled = false;
+    // Do not re-enable the button if the preference is disabled.
+    const preferences = await getPreferences().catch(() => null);
+
+    highlightButton.disabled =
+      !preferences?.highlightLinksEnabled;
   }
 }
 
+// READING LIST
 async function loadReadingList(): Promise<void> {
   if (!readingListStatus || !readingListItems) {
     return;
@@ -324,7 +367,6 @@ async function loadReadingList(): Promise<void> {
 
   try {
     const pages = await getReadingList();
-
     displayReadingList(pages);
   } catch (error) {
     console.error("Failed to load reading list:", error);
@@ -417,7 +459,7 @@ async function handleRemovePage(
   }
 }
 
-
+// SAVE PAGE
 async function handleSavePageClick(): Promise<void> {
   if (!savePageButton || !savePageStatus) {
     return;
@@ -441,7 +483,6 @@ async function handleSavePageClick(): Promise<void> {
 
     const pageUrl = activeTab.url;
 
-    // Only save regular web pages.
     if (!/^https?:\/\//i.test(pageUrl)) {
       throw new Error(
         "Only HTTP and HTTPS pages can be saved."
@@ -464,7 +505,6 @@ async function handleSavePageClick(): Promise<void> {
       "Page saved successfully.";
 
     await loadReadingList();
-
   } catch (error) {
     console.error("Failed to save page:", error);
 
@@ -472,20 +512,22 @@ async function handleSavePageClick(): Promise<void> {
       error instanceof Error
         ? error.message
         : "Unable to save this page.";
-
   } finally {
     savePageButton.disabled = false;
     savePageButton.textContent = "Save Page";
   }
 }
 
-
+// EVENT LISTENERS
 if (inspectButton) {
   inspectButton.addEventListener("click", inspectActivePage);
 }
 
 if (highlightButton) {
-  highlightButton.addEventListener("click", handleHighlightButtonClick);
+  highlightButton.addEventListener(
+    "click",
+    handleHighlightButtonClick
+  );
 }
 
 if (savePageButton) {
@@ -495,8 +537,7 @@ if (savePageButton) {
   );
 }
 
-// Load browser tab information when popup opens.
-loadActiveTabInfo();
-
-// Load saved pages when popup opens.
-loadReadingList();
+// INITIALIZATION
+void loadActiveTabInfo();
+void loadReadingList();
+void loadPreferences();

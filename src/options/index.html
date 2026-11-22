@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Page Inspector — Options</title>
+    <link rel="stylesheet" href="./options.css" />
+  </head>
+
+  <body>
+    <main class="options-container">
+      <header class="options-header">
+        <h1>Page Inspector Settings</h1>
+        <p>Customize how Page Inspector works.</p>
+      </header>
+
+      <section class="settings-section">
+        <h2>General Preferences</h2>
+
+        <div class="setting-item">
+          <div class="setting-description">
+            <label for="highlight-links-enabled">
+              Highlight Links
+            </label>
+            <p>
+              Enable or disable link highlighting on web pages.
+            </p>
+          </div>
+
+          <input
+            id="highlight-links-enabled"
+            type="checkbox"
+          />
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-description">
+            <label for="save-notifications-enabled">
+              Save Notifications
+            </label>
+            <p>
+              Display feedback when a page is saved or already exists.
+            </p>
+          </div>
+
+          <input
+            id="save-notifications-enabled"
+            type="checkbox"
+          />
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-description">
+            <label for="highlight-color">
+              Highlight Color
+            </label>
+            <p>
+              Choose the background color used when highlighting links.
+            </p>
+          </div>
+
+          <input
+            id="highlight-color"
+            type="color"
+            value="#f59e0b"
+          />
+        </div>
+      </section>
+
+      <footer class="options-footer">
+        <p id="settings-status" role="status" aria-live="polite">
+          Settings are loaded automatically.
+        </p>
+      </footer>
+    </main>
+
+    <script type="module" src="./options.ts"></script>
+  </body>
+</html>

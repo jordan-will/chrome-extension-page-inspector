@@ -1,14 +1,8 @@
 
-import {
-  createErrorResponse,
-  createSuccessResponse,
-} from "../shared/types/responses";
-
 import type {
   ExtensionRequest,
-  InspectPageResponse,
   PageInspectionData,
-  ExtensionResponse
+  ExtensionResponse,
 } from "../shared/types/messages";
 
 declare global {
@@ -17,7 +11,19 @@ declare global {
   }
 }
 
+interface ContentPreferences {
+  highlightLinksEnabled: boolean;
+  saveNotificationsEnabled: boolean;
+  highlightColor: string;
+}
+
+const DEFAULT_HIGHLIGHT_COLOR = "#f59e0b";
+const PREFERENCES_STORAGE_KEY = "preferences";
+
 const HIGHLIGHT_CLASS = "page-inspector-highlight";
+const HIGHLIGHT_STYLE_ID = "page-inspector-highlight-styles";
+
+let highlightColor = DEFAULT_HIGHLIGHT_COLOR;
 
 // Prevent duplicate message listener registration.
 if (!window.pageInspectorInitialized) {
@@ -25,11 +31,56 @@ if (!window.pageInspectorInitialized) {
   initializeContentScript();
 }
 
-// Register message handling.
+// Register message handling and preference monitoring.
 function initializeContentScript(): void {
-  chrome.runtime.onMessage.addListener(
-    handleMessage
-  );
+  chrome.runtime.onMessage.addListener(handleMessage);
+
+  void loadHighlightPreferences();
+
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local" || !changes[PREFERENCES_STORAGE_KEY]) {
+      return;
+    }
+
+    const preferences = changes[PREFERENCES_STORAGE_KEY]
+      .newValue as Partial<ContentPreferences> | undefined;
+
+    if (preferences?.highlightColor) {
+      highlightColor = preferences.highlightColor;
+
+      updateHighlightStyles();
+
+      const highlightedLinks =
+        document.querySelectorAll(`.${HIGHLIGHT_CLASS}`);
+
+      if (highlightedLinks.length > 0) {
+        injectHighlightStyles();
+      }
+    }
+  });
+}
+
+// Load the saved highlight color directly from Chrome Storage.
+async function loadHighlightPreferences(): Promise<void> {
+  try {
+    const result = await chrome.storage.local.get(
+      PREFERENCES_STORAGE_KEY
+    );
+
+    const preferences = result[
+      PREFERENCES_STORAGE_KEY
+    ] as Partial<ContentPreferences> | undefined;
+
+    highlightColor =
+      preferences?.highlightColor ?? DEFAULT_HIGHLIGHT_COLOR;
+
+    updateHighlightStyles();
+  } catch (error) {
+    console.error(
+      "Failed to load highlighting preferences:",
+      error
+    );
+  }
 }
 
 // Centralized message handler.
@@ -40,7 +91,6 @@ function handleMessage(
 ): void {
   try {
     switch (message.type) {
-
       case "TOGGLE_LINK_HIGHLIGHT": {
         if (message.enabled) {
           injectHighlightStyles();
@@ -61,22 +111,29 @@ function handleMessage(
 
       case "INSPECT_PAGE": {
         const data = inspectPage();
-        sendResponse(createSuccessResponse(data));
+
+        sendResponse({
+          success: true,
+          data,
+        });
+
         break;
       }
 
       default: {
-        sendResponse(
-          createErrorResponse("Unsupported message type.")
-        );
+        sendResponse({
+          success: false,
+          error: "Unsupported message type.",
+        });
       }
     }
   } catch (error) {
     console.error("Content Script error:", error);
 
-    sendResponse(
-      createErrorResponse(getErrorMessage(error))
-    );
+    sendResponse({
+      success: false,
+      error: getErrorMessage(error),
+    });
   }
 }
 
@@ -95,6 +152,7 @@ function inspectPage(): PageInspectionData {
   };
 }
 
+// Enables or disables link highlighting.
 function toggleLinkHighlight(enabled: boolean): number {
   const links = document.querySelectorAll<HTMLAnchorElement>("a");
 
@@ -109,26 +167,47 @@ function toggleLinkHighlight(enabled: boolean): number {
   return links.length;
 }
 
+// Creates or refreshes the highlighting styles.
 function injectHighlightStyles(): void {
-  const styleId = "page-inspector-highlight-styles";
+  let style = document.getElementById(
+    HIGHLIGHT_STYLE_ID
+  ) as HTMLStyleElement | null;
 
-  if (document.getElementById(styleId)) {
-    return;
+  if (!style) {
+    style = document.createElement("style");
+    style.id = HIGHLIGHT_STYLE_ID;
+    document.head.appendChild(style);
   }
-
-  const style = document.createElement("style");
-
-  style.id = styleId;
 
   style.textContent = `
     .${HIGHLIGHT_CLASS} {
-      outline: 2px solid #f59e0b !important;
-      background-color: rgba(245, 158, 11, 0.15) !important;
+      outline: 2px solid ${highlightColor} !important;
+      background-color: ${getHighlightBackgroundColor()} !important;
       border-radius: 3px !important;
     }
   `;
+}
 
-  document.head.appendChild(style);
+// Updates the existing style element.
+function updateHighlightStyles(): void {
+  const style = document.getElementById(
+    HIGHLIGHT_STYLE_ID
+  );
+
+  if (style) {
+    injectHighlightStyles();
+  }
+}
+
+// Generates a translucent background from the selected hex color.
+function getHighlightBackgroundColor(): string {
+  const hex = highlightColor.replace("#", "");
+
+  const red = parseInt(hex.substring(0, 2), 16);
+  const green = parseInt(hex.substring(2, 4), 16);
+  const blue = parseInt(hex.substring(4, 6), 16);
+
+  return `rgba(${red}, ${green}, ${blue}, 0.15)`;
 }
 
 // Counts words in the webpage.

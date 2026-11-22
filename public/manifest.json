@@ -15,5 +15,6 @@
   ],
   "action": {
     "default_popup": "popup/index.html"
-  }
+  },
+  "options_page": "options/index.html"
 }
