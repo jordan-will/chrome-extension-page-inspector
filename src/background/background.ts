@@ -14,6 +14,13 @@ import {
   getPreferences,
 } from "../shared/storage/preferences";
 
+import {
+  createNotification,
+  registerNotificationListeners,
+} from "../shared/notifications/notifications";
+
+registerNotificationListeners();
+
 // Context menu identifiers.
 const MENU_INSPECT = "page-inspector-inspect";
 const MENU_HIGHLIGHT = "page-inspector-highlight";
@@ -97,10 +104,12 @@ function getErrorMessage(error: unknown): string {
   return "An unexpected error occurred.";
 }
 
-// Display save-operation feedback through the extension badge.
+// Display save-operation feedback through the badge and system notification.
 async function showSaveFeedback(
   tabId: number,
-  status: "SAVE" | "DUP" | "ERR"
+  status: "SAVE" | "DUP" | "ERR",
+  notificationTitle: string,
+  notificationMessage: string
 ): Promise<void> {
   const preferences = await getPreferences();
 
@@ -127,6 +136,11 @@ async function showSaveFeedback(
   await chrome.action.setBadgeText({
     tabId,
     text: status,
+  });
+
+  await createNotification({
+    title: notificationTitle,
+    message: notificationMessage,
   });
 }
 
@@ -213,7 +227,13 @@ async function handleContextMenuClick(
             result.existingPage
           );
 
-          await showSaveFeedback(tabId, "DUP");
+          await showSaveFeedback(
+            tabId,
+            "DUP",
+            "Page already saved",
+            "This page is already in your Reading List."
+          );
+
           break;
         }
 
@@ -222,7 +242,13 @@ async function handleContextMenuClick(
           result.page
         );
 
-        await showSaveFeedback(tabId, "SAVE");
+        await showSaveFeedback(
+          tabId,
+          "SAVE",
+          "Page saved successfully",
+          `"${result.page.title}" was added to your Reading List.`
+        );
+
         break;
       }
 
@@ -233,14 +259,21 @@ async function handleContextMenuClick(
         );
     }
   } catch (error) {
+    const errorMessage = getErrorMessage(error);
+
     console.error(
       "Context menu operation failed:",
-      getErrorMessage(error)
+      errorMessage
     );
 
     if (info.menuItemId === MENU_SAVE) {
       try {
-        await showSaveFeedback(tabId, "ERR");
+        await showSaveFeedback(
+          tabId,
+          "ERR",
+          "Unable to save page",
+          errorMessage
+        );
       } catch (feedbackError) {
         console.error(
           "Failed to display save feedback:",
